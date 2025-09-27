@@ -1,0 +1,89 @@
+venv/
+__pycache__/
+media/
+.env
+GEMINI.md
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# === Virtual Environment ===
+venv/
+ENV/
+env/
+.venv/
+
+# === Django ===
+*.log
+*.pot
+*.pyc
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static/
+tmp/
+*.pid
+
+# === Face Recognition Project Specific ===
+# store face encodings, snapshots, and QR codes locally only
+face_data/
+snapshots/
+qr_codes/
+
+# === IDE / Editors ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === OS / System Files ===
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# === Testing / Coverage ===
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+*.log
+junit.xml
+
+# === Build / Packaging ===
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
+.installed.cfg
+*.manifest
+*.spec
+
+# === Env / Secrets ===
+.env
+*.env
+*.key
+*.pem
+*.crt
+*.cfg
+*.ini
+
+# === Docker ===
+*.pid
+*.seed
+*.bak
+*.backup
+docker-compose.override.yml
+
+# === Jupyter / Notebooks (if used) ===
+.ipynb_checkpoints/
+*.ipynb

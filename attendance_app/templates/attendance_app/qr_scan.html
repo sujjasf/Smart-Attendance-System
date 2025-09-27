@@ -1,0 +1,55 @@
+{% extends 'attendance_app/base.html' %}
+
+{% block content %}
+<h1>Scan QR Code</h1>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    {{ error }}
+</div>
+{% endif %}
+
+{% if success %}
+<div class="alert alert-success" role="alert">
+    {{ success }}
+</div>
+{% endif %}
+
+<video id="webcam" width="640" height="480" autoplay></video>
+<button id="scan-button" class="btn btn-primary">Scan QR</button>
+<form id="qr-form" method="post" enctype="multipart/form-data" style="display:none;">
+    {% csrf_token %}
+    <input type="file" name="image" id="image-input">
+</form>
+<canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+
+<script>
+    const webcam = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const scanButton = document.getElementById('scan-button');
+    const qrForm = document.getElementById('qr-form');
+    const imageInput = document.getElementById('image-input');
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            webcam.srcObject = stream;
+        })
+        .catch(err => {
+            console.error("Error accessing webcam: ", err);
+            alert("Error accessing webcam.");
+        });
+
+    scanButton.addEventListener('click', () => {
+        const context = canvas.getContext('2d');
+        context.drawImage(webcam, 0, 0, 640, 480);
+
+        canvas.toBlob(blob => {
+            const file = new File([blob], 'scan.png', { type: 'image/png' });
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            imageInput.files = dataTransfer.files;
+            qrForm.submit();
+        }, 'image/png');
+    });
+</script>
+{% endblock %}

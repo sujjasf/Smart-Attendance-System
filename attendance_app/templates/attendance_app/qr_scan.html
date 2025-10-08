@@ -1,34 +1,21 @@
 {% extends 'attendance_app/base.html' %}
 
 {% block content %}
-<h1>Scan QR Code</h1>
+<div class="container text-center">
+    <h1 class="my-4">Scan QR Code</h1>
 
-{% if error %}
-<div class="alert alert-danger" role="alert">
-    {{ error }}
+    <div id="result" class="mt-4"></div>
+
+    <video id="webcam" width="640" height="480" autoplay></video>
+    <button id="scan-button" class="btn btn-primary my-3">Scan QR</button>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
 </div>
-{% endif %}
-
-{% if success %}
-<div class="alert alert-success" role="alert">
-    {{ success }}
-</div>
-{% endif %}
-
-<video id="webcam" width="640" height="480" autoplay></video>
-<button id="scan-button" class="btn btn-primary">Scan QR</button>
-<form id="qr-form" method="post" enctype="multipart/form-data" style="display:none;">
-    {% csrf_token %}
-    <input type="file" name="image" id="image-input">
-</form>
-<canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
 
 <script>
     const webcam = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const scanButton = document.getElementById('scan-button');
-    const qrForm = document.getElementById('qr-form');
-    const imageInput = document.getElementById('image-input');
+    const resultDiv = document.getElementById('result');
 
     navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
@@ -36,7 +23,7 @@
         })
         .catch(err => {
             console.error("Error accessing webcam: ", err);
-            alert("Error accessing webcam.");
+            resultDiv.innerHTML = `<div class="alert alert-danger">Error accessing webcam.</div>`;
         });
 
     scanButton.addEventListener('click', () => {
@@ -44,11 +31,22 @@
         context.drawImage(webcam, 0, 0, 640, 480);
 
         canvas.toBlob(blob => {
-            const file = new File([blob], 'scan.png', { type: 'image/png' });
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(file);
-            imageInput.files = dataTransfer.files;
-            qrForm.submit();
+            const formData = new FormData();
+            formData.append('image', blob, 'qr_scan.png');
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            fetch('{% url "attendance_app:qr_scan" %}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    resultDiv.innerHTML = `<div class="alert alert-success">QR Code scanned successfully! Student ID: ${data.student_id}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                }
+            });
         }, 'image/png');
     });
 </script>

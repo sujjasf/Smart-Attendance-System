@@ -4,6 +4,8 @@ A Django-based attendance system using QR codes and facial recognition.
 
 ## Setup
 
+source venv/bin/activate
+echo $VIRTUAL_ENV
 1.  **Install dependencies:**
     ```bash
     pip install -r requirements.txt

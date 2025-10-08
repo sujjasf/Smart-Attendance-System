@@ -4,6 +4,15 @@ from .models import Student, Attendance
 import cv2
 from pyzbar.pyzbar import decode
 import numpy as np
+import face_recognition
+import json
+import os
+from django.http import JsonResponse, HttpResponse
+from django.core.files.base import ContentFile
+import base64
+import time
+import pandas as pd
+
 
 class HomeView(View):
     def get(self, request):
@@ -21,24 +30,19 @@ class QRScanView(View):
                 image = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
 
                 if image is None:
-                    return render(request, 'attendance_app/qr_scan.html', {'error': 'Could not decode image.'})
+                    return JsonResponse({'status': 'error', 'message': 'Could not decode image.'})
 
                 decoded_objects = decode(image)
 
                 if decoded_objects:
-                    roll_number = decoded_objects[0].data.decode('utf-8')
-                    try:
-                        student = Student.objects.get(roll_number=roll_number)
-                        Attendance.objects.create(student=student, verification_method='QR')
-                        return render(request, 'attendance_app/qr_scan.html', {'success': f'Attendance marked for {student.name}'})
-                    except Student.DoesNotExist:
-                        return render(request, 'attendance_app/qr_scan.html', {'error': f'Student with roll number {roll_number} not found.'})
+                    student_id = decoded_objects[0].data.decode('utf-8')
+                    return JsonResponse({'status': 'ok', 'student_id': student_id})
                 else:
-                    return render(request, 'attendance_app/qr_scan.html', {'error': 'No QR Code found.'})
+                    return JsonResponse({'status': 'no_qr', 'message': 'No QR Code found.'})
             except Exception as e:
-                return render(request, 'attendance_app/qr_scan.html', {'error': str(e)})
+                return JsonResponse({'status': 'error', 'message': str(e)})
 
-        return render(request, 'attendance_app/qr_scan.html', {'error': 'No image file found.'})
+        return JsonResponse({'status': 'error', 'message': 'No image file found.'})
 
 class FaceRecognitionView(View):
     def get(self, request):
@@ -47,3 +51,78 @@ class FaceRecognitionView(View):
     def post(self, request):
         # Face recognition logic here
         pass
+
+def verify_face(request):
+    if request.method == 'POST':
+        student_id = request.POST.get('student_id')
+        image_data_url = request.POST.get('image')
+
+        try:
+            student = Student.objects.get(student_id=student_id)
+            stored_encoding = json.loads(student.face_encoding)
+        except (Student.DoesNotExist, json.JSONDecodeError):
+            return JsonResponse({'match': False, 'error': 'Invalid student data.'})
+
+        format, imgstr = image_data_url.split(';base64,') 
+        ext = format.split('/')[-1] 
+        image_data = ContentFile(base64.b64decode(imgstr), name=f'{student_id}_{int(time.time())}.{ext}')
+
+        # Convert to numpy array for face_recognition
+        image_array = cv2.imdecode(np.frombuffer(image_data.read(), np.uint8), cv2.IMREAD_COLOR)
+
+        # Find face locations and encodings
+        face_locations = face_recognition.face_locations(image_array)
+        if not face_locations:
+            return JsonResponse({'match': False, 'error': 'No face detected in the image.'})
+
+        live_encoding = face_recognition.face_encodings(image_array, face_locations)[0]
+
+        # Compare faces
+        match = face_recognition.compare_faces([stored_encoding], live_encoding, tolerance=0.5)
+        distance = face_recognition.face_distance([stored_encoding], live_encoding)[0]
+
+        if match[0]:
+            # Mark attendance
+            Attendance.objects.create(
+                student=student,
+                status='PRESENT',
+                snapshot=image_data,
+                confidence=distance
+            )
+            return JsonResponse({'match': True, 'confidence': distance})
+        else:
+            # Mark as failed match
+            Attendance.objects.create(
+                student=student,
+                status='FAILED_MATCH',
+                snapshot=image_data,
+                confidence=distance
+            )
+            return JsonResponse({'match': False, 'confidence': distance})
+
+    return JsonResponse({'error': 'Invalid request method.'}, status=405)
+
+def export_attendance(request):
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    student_id = request.GET.get('student_id')
+
+    attendance_records = Attendance.objects.all()
+
+    if student_id:
+        attendance_records = attendance_records.filter(student__student_id=student_id)
+    if date_from:
+        attendance_records = attendance_records.filter(timestamp__date__gte=date_from)
+    if date_to:
+        attendance_records = attendance_records.filter(timestamp__date__lte=date_to)
+
+    df = pd.DataFrame(list(attendance_records.values(
+        'student__student_id', 'student__full_name', 'timestamp', 'status', 'confidence'
+    )))
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=attendance.xlsx'
+
+    df.to_excel(response, index=False)
+
+    return response

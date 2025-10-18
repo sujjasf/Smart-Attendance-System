@@ -4,10 +4,13 @@
 <div class="container text-center">
     <h1 class="my-4">Scan QR Code</h1>
 
+    <div id="message" class="mt-4 alert alert-info">Hold your ID in front of the camera and click Scan.</div>
     <div id="result" class="mt-4"></div>
 
     <video id="webcam" width="640" height="480" autoplay></video>
-    <button id="scan-button" class="btn btn-primary my-3">Scan QR</button>
+    <br>
+    <button id="scan-button" class="btn btn-primary my-3">Scan</button>
+    <button id="try-again-button" class="btn btn-secondary my-3" style="display:none;">Try Again</button>
     <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
 </div>
 
@@ -15,18 +18,75 @@
     const webcam = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const scanButton = document.getElementById('scan-button');
+    const tryAgainButton = document.getElementById('try-again-button');
     const resultDiv = document.getElementById('result');
+    const messageDiv = document.getElementById('message');
+
+    let stream;
+
+    function resetUI() {
+        resultDiv.innerHTML = '';
+        messageDiv.innerHTML = 'Hold your ID in front of the camera and click Scan.';
+        messageDiv.className = 'mt-4 alert alert-info';
+        scanButton.style.display = 'inline-block';
+        tryAgainButton.style.display = 'none';
+    }
 
     navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
+        .then(s => {
+            stream = s;
             webcam.srcObject = stream;
         })
         .catch(err => {
             console.error("Error accessing webcam: ", err);
-            resultDiv.innerHTML = `<div class="alert alert-danger">Error accessing webcam.</div>`;
+            messageDiv.innerHTML = `Error accessing webcam. Please ensure you have a webcam connected and have granted permission.`;
+            messageDiv.className = 'mt-4 alert alert-danger';
+            scanButton.style.display = 'none';
         });
 
+    function verifyFace(studentId) {
+        messageDiv.innerHTML = 'QR code scanned! Now please look at the camera for face verification...';
+        messageDiv.className = 'mt-4 alert alert-info';
+
+        setTimeout(() => {
+            const context = canvas.getContext('2d');
+            context.drawImage(webcam, 0, 0, 640, 480);
+
+            const imageDataUrl = canvas.toDataURL('image/jpeg');
+
+            const formData = new FormData();
+            formData.append('image', imageDataUrl);
+            formData.append('student_id', studentId);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            fetch('{% url "attendance_app:verify_face" %}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.match) {
+                    messageDiv.innerHTML = `Welcome, ${studentId}! Attendance marked successfully.`;
+                    messageDiv.className = 'mt-4 alert alert-success';
+                } else {
+                    messageDiv.innerHTML = `Face not recognized. Please try again.`;
+                    messageDiv.className = 'mt-4 alert alert-danger';
+                }
+                tryAgainButton.style.display = 'inline-block';
+            })
+            .catch(err => {
+                messageDiv.innerHTML = `An error occurred during face verification. Please try again.`;
+                messageDiv.className = 'mt-4 alert alert-danger';
+                tryAgainButton.style.display = 'inline-block';
+            });
+        }, 2000); // 2 second delay
+    }
+
     scanButton.addEventListener('click', () => {
+        scanButton.style.display = 'none';
+        messageDiv.innerHTML = 'Scanning for QR code...';
+        messageDiv.className = 'mt-4 alert alert-info';
+
         const context = canvas.getContext('2d');
         context.drawImage(webcam, 0, 0, 640, 480);
 
@@ -42,12 +102,22 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'ok') {
-                    resultDiv.innerHTML = `<div class="alert alert-success">QR Code scanned successfully! Student ID: ${data.student_id}</div>`;
+                    verifyFace(data.student_id);
                 } else {
-                    resultDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                    messageDiv.innerHTML = data.message || 'No QR Code found. Please try again.';
+                    messageDiv.className = 'mt-4 alert alert-danger';
+                    tryAgainButton.style.display = 'inline-block';
                 }
+            })
+            .catch(err => {
+                messageDiv.innerHTML = 'An error occurred during QR scan. Please try again.';
+                messageDiv.className = 'mt-4 alert alert-danger';
+                tryAgainButton.style.display = 'inline-block';
             });
         }, 'image/png');
     });
+
+    tryAgainButton.addEventListener('click', resetUI);
+
 </script>
 {% endblock %}

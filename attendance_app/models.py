@@ -9,7 +9,8 @@ class Student(models.Model):
     name = models.CharField(max_length=100, default="")
     roll_number = models.CharField(max_length=20, unique=True, default="")
     email = models.EmailField(blank=True, null=True)
-    face_encoding = models.BinaryField(null=True, blank=True)
+    photo = models.ImageField(upload_to='students/', null=True, blank=True)
+    face_encoding = models.TextField(null=True, blank=True)
     qr_code = models.ImageField(upload_to='qr_codes/', null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 

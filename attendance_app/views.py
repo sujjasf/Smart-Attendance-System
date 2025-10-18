@@ -4,7 +4,6 @@ from .models import Student, Attendance
 import cv2
 from pyzbar.pyzbar import decode
 import numpy as np
-import face_recognition
 import json
 import os
 from django.http import JsonResponse, HttpResponse
@@ -53,12 +52,13 @@ class FaceRecognitionView(View):
         pass
 
 def verify_face(request):
+    import face_recognition
     if request.method == 'POST':
         student_id = request.POST.get('student_id')
         image_data_url = request.POST.get('image')
 
         try:
-            student = Student.objects.get(student_id=student_id)
+            student = Student.objects.get(roll_number=student_id)
             stored_encoding = json.loads(student.face_encoding)
         except (Student.DoesNotExist, json.JSONDecodeError):
             return JsonResponse({'match': False, 'error': 'Invalid student data.'})

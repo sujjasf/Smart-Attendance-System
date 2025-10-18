@@ -1,41 +1,38 @@
 import os
 import qrcode
+from io import BytesIO
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from attendance_app.models import Student
 
 class Command(BaseCommand):
-    help = 'Generate QR code for a student'
+    help = 'Generate QR code for a student (stores image in student.qr_code)'
 
     def add_arguments(self, parser):
-        parser.add_argument('--student', type=str, help='The student_id of the student')
+        parser.add_argument('--roll', type=str, help='The roll_number of the student')
 
     def handle(self, *args, **options):
-        student_id = options['student']
-        if not student_id:
-            self.stdout.write(self.style.ERROR('Please provide a student_id using --student argument.'))
+        roll = options['roll']
+        if not roll:
+            self.stdout.write(self.style.ERROR('Please provide a roll_number using --roll argument.'))
             return
 
         try:
-            student = Student.objects.get(student_id=student_id)
+            student = Student.objects.get(roll_number=roll)
         except Student.DoesNotExist:
-            self.stdout.write(self.style.ERROR(f'Student with student_id "{student_id}" does not exist.'))
+            self.stdout.write(self.style.ERROR(f'Student with roll_number "{roll}" does not exist.'))
             return
 
-        qr_data = student.student_id
-        qr_code_image = qrcode.make(qr_data)
+        # Payload stored in QR: use roll_number (keep minimal)
+        qr_payload = student.roll_number
+        qr_img = qrcode.make(qr_payload)
+        buffer = BytesIO()
+        qr_img.save(buffer, format='PNG')
+        buffer.seek(0)
 
-        # Ensure the media directory exists
-        qr_code_dir = os.path.join(settings.MEDIA_ROOT, 'qrcodes')
-        os.makedirs(qr_code_dir, exist_ok=True)
+        # Save to the ImageField
+        filename = f'{student.roll_number}_qr.png'
+        student.qr_code.save(filename, ContentFile(buffer.read()), save=True)
 
-        # Save the QR code image
-        qr_code_filename = f'{student.student_id}.png'
-        qr_code_path = os.path.join(qr_code_dir, qr_code_filename)
-        qr_code_image.save(qr_code_path)
-
-        # Update the student's qr_data field
-        student.qr_data = os.path.join('qrcodes', qr_code_filename)
-        student.save()
-
-        self.stdout.write(self.style.SUCCESS(f'Successfully generated QR code for {student.full_name} ({student.student_id})'))
+        self.stdout.write(self.style.SUCCESS(f'Successfully generated QR code for {student.name} ({student.roll_number})'))

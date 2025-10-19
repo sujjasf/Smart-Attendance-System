@@ -43,13 +43,7 @@ class QRScanView(View):
 
         return JsonResponse({'status': 'error', 'message': 'No image file found.'})
 
-class FaceRecognitionView(View):
-    def get(self, request):
-        return render(request, 'attendance_app/face_recognition.html')
-    
-    def post(self, request):
-        # Face recognition logic here
-        pass
+
 
 def verify_face(request):
     import face_recognition

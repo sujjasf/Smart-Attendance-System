@@ -4,48 +4,69 @@
 <div class="container text-center">
     <h1 class="my-4">Scan QR Code</h1>
 
-    <div id="message" class="mt-4 alert alert-info">Hold your ID in front of the camera and click Scan.</div>
+    <div id="message" class="mt-4 alert alert-info">Please hold your ID in front of the camera. Scanning...</div>
     <div id="result" class="mt-4"></div>
 
     <video id="webcam" width="640" height="480" autoplay></video>
     <br>
-    <button id="scan-button" class="btn btn-primary my-3">Scan</button>
-    <button id="try-again-button" class="btn btn-secondary my-3" style="display:none;">Try Again</button>
+    <div id="try-again-buttons" style="display:none;">
+        <button id="try-again-qr-button" class="btn btn-secondary my-3">Try Again QR Scan</button>
+        <button id="try-again-face-button" class="btn btn-secondary my-3 ms-2">Try Again Face Scan</button>
+    </div>
     <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
 </div>
 
 <script>
     const webcam = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
-    const scanButton = document.getElementById('scan-button');
-    const tryAgainButton = document.getElementById('try-again-button');
+    const tryAgainButtonsDiv = document.getElementById('try-again-buttons');
+    const tryAgainQrButton = document.getElementById('try-again-qr-button');
+    const tryAgainFaceButton = document.getElementById('try-again-face-button');
     const resultDiv = document.getElementById('result');
     const messageDiv = document.getElementById('message');
 
     let stream;
+    let scanningInterval;
+    let lastScannedStudentId = null; // Store the last successfully scanned student ID
 
     function resetUI() {
         resultDiv.innerHTML = '';
-        messageDiv.innerHTML = 'Hold your ID in front of the camera and click Scan.';
+        messageDiv.innerHTML = 'Please hold your ID in front of the camera. Scanning...';
         messageDiv.className = 'mt-4 alert alert-info';
-        scanButton.style.display = 'inline-block';
-        tryAgainButton.style.display = 'none';
+        tryAgainButtonsDiv.style.display = 'none';
+        lastScannedStudentId = null;
+        startScanning();
+    }
+
+    function stopScanning() {
+        if (scanningInterval) {
+            clearInterval(scanningInterval);
+            scanningInterval = null;
+        }
+    }
+
+    function startScanning() {
+        stopScanning(); // Ensure no multiple intervals are running
+        scanningInterval = setInterval(() => {
+            scanQRCode();
+        }, 2000); // Scan every 2 seconds
     }
 
     navigator.mediaDevices.getUserMedia({ video: true })
         .then(s => {
             stream = s;
             webcam.srcObject = stream;
+            startScanning();
         })
         .catch(err => {
             console.error("Error accessing webcam: ", err);
             messageDiv.innerHTML = `Error accessing webcam. Please ensure you have a webcam connected and have granted permission.`;
             messageDiv.className = 'mt-4 alert alert-danger';
-            scanButton.style.display = 'none';
         });
 
     function verifyFace(studentId) {
-        messageDiv.innerHTML = 'QR code scanned! Now please look at the camera for face verification...';
+        lastScannedStudentId = studentId; // Store for 'Try Again Face Scan'
+        messageDiv.innerHTML = `QR code for ${studentId} found! Now verifying face...`;
         messageDiv.className = 'mt-4 alert alert-info';
 
         setTimeout(() => {
@@ -72,20 +93,20 @@
                     messageDiv.innerHTML = `Face not recognized. Please try again.`;
                     messageDiv.className = 'mt-4 alert alert-danger';
                 }
-                tryAgainButton.style.display = 'inline-block';
+                tryAgainButtonsDiv.style.display = 'block';
+                tryAgainFaceButton.style.display = 'inline-block'; // Show face scan retry
             })
             .catch(err => {
                 messageDiv.innerHTML = `An error occurred during face verification. Please try again.`;
                 messageDiv.className = 'mt-4 alert alert-danger';
-                tryAgainButton.style.display = 'inline-block';
+                tryAgainButtonsDiv.style.display = 'block';
+                tryAgainFaceButton.style.display = 'inline-block';
             });
-        }, 2000); // 2 second delay
+        }, 1000); // 1 second delay before face capture
     }
 
-    scanButton.addEventListener('click', () => {
-        scanButton.style.display = 'none';
-        messageDiv.innerHTML = 'Scanning for QR code...';
-        messageDiv.className = 'mt-4 alert alert-info';
+    function scanQRCode() {
+        if (!stream) return;
 
         const context = canvas.getContext('2d');
         context.drawImage(webcam, 0, 0, 640, 480);
@@ -102,22 +123,28 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'ok') {
+                    stopScanning();
                     verifyFace(data.student_id);
                 } else {
-                    messageDiv.innerHTML = data.message || 'No QR Code found. Please try again.';
-                    messageDiv.className = 'mt-4 alert alert-danger';
-                    tryAgainButton.style.display = 'inline-block';
+                    // No QR code found, just continue scanning silently
                 }
             })
             .catch(err => {
-                messageDiv.innerHTML = 'An error occurred during QR scan. Please try again.';
-                messageDiv.className = 'mt-4 alert alert-danger';
-                tryAgainButton.style.display = 'inline-block';
+                // Error during fetch, just continue scanning silently
+                console.error("QR scan fetch error:", err);
             });
         }, 'image/png');
-    });
+    }
 
-    tryAgainButton.addEventListener('click', resetUI);
+    tryAgainQrButton.addEventListener('click', resetUI);
+    tryAgainFaceButton.addEventListener('click', () => {
+        if (lastScannedStudentId) {
+            verifyFace(lastScannedStudentId);
+        } else {
+            // Should not happen if 'Try Again Face Scan' is visible
+            resetUI();
+        }
+    });
 
 </script>
 {% endblock %}

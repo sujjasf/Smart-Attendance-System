@@ -8,12 +8,22 @@
     <div id="result" class="mt-4"></div>
 
     <video id="webcam" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
     <br>
     <div id="try-again-buttons" style="display:none;">
         <button id="try-again-qr-button" class="btn btn-secondary my-3">Try Again QR Scan</button>
         <button id="try-again-face-button" class="btn btn-secondary my-3 ms-2">Try Again Face Scan</button>
     </div>
-    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+
+<style>
+    #canvas {
+        position: absolute;
+        top: 160px;
+        left: 50%;
+        transform: translateX(-50%);
+        pointer-events: none; /* Make canvas transparent to mouse events */
+    }
+</style>
 </div>
 
 <script>
@@ -86,6 +96,25 @@
             })
             .then(response => response.json())
             .then(data => {
+                const context = canvas.getContext('2d');
+                context.clearRect(0, 0, canvas.width, canvas.height); // Clear previous drawings
+
+                if (data.face_location) {
+                    const { top, right, bottom, left } = data.face_location;
+                    context.strokeStyle = 'red';
+                    context.lineWidth = 2;
+                    context.strokeRect(left, top, right - left, bottom - top);
+                }
+
+                if (data.landmarks) {
+                    context.fillStyle = 'yellow';
+                    for (const landmark of data.landmarks) {
+                        context.beginPath();
+                        context.arc(landmark[0], landmark[1], 2, 0, 2 * Math.PI);
+                        context.fill();
+                    }
+                }
+
                 if (data.match) {
                     messageDiv.innerHTML = `Welcome, ${studentId}! Attendance marked successfully.`;
                     messageDiv.className = 'mt-4 alert alert-success';

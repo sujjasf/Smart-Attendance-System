@@ -27,4 +27,4 @@ echo $VIRTUAL_ENV
 
 
 the terminal command to generate qr code from roll number is :
-source venv/bin/activate && python manage.py generate_qr --roll=STU001 (Generate a QR code for the student with roll number STU001.)
+source venv310/bin/activate && python manage.py generate_qr --roll=STU001 (Generate a QR code for the student with roll number STU001.)

@@ -11,6 +11,11 @@ from django.core.files.base import ContentFile
 import base64
 import time
 import pandas as pd
+import dlib
+
+# Load dlib's shape predictor
+shape_predictor_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.. ', 'easy_facial_recognition', 'pretrained_model', 'shape_predictor_68_face_landmarks.dat')
+shape_predictor = dlib.shape_predictor(shape_predictor_path)
 
 
 class HomeView(View):
@@ -66,8 +71,21 @@ def verify_face(request):
 
         # Find face locations and encodings
         face_locations = face_recognition.face_locations(image_array)
+        print("Face locations:", face_locations)
+
         if not face_locations:
+            print("No face detected.")
             return JsonResponse({'match': False, 'error': 'No face detected in the image.'})
+
+        # Send face location and landmarks to frontend
+        top, right, bottom, left = face_locations[0]
+        face_location = {'top': top, 'right': right, 'bottom': bottom, 'left': left}
+        print("Face location found:", face_location)
+
+        # Get facial landmarks
+        shape = shape_predictor(image_array, dlib.rectangle(left, top, right, bottom))
+        landmarks = [(p.x, p.y) for p in shape.parts()]
+
 
         live_encoding = face_recognition.face_encodings(image_array, face_locations)[0]
 
@@ -83,7 +101,9 @@ def verify_face(request):
                 snapshot=image_data,
                 confidence=distance
             )
-            return JsonResponse({'match': True, 'confidence': distance})
+            response_data = {'match': True, 'confidence': distance, 'face_location': face_location, 'landmarks': landmarks}
+            print("Response:", response_data)
+            return JsonResponse(response_data)
         else:
             # Mark as failed match
             Attendance.objects.create(
@@ -92,7 +112,9 @@ def verify_face(request):
                 snapshot=image_data,
                 confidence=distance
             )
-            return JsonResponse({'match': False, 'confidence': distance})
+            response_data = {'match': False, 'confidence': distance, 'face_location': face_location, 'landmarks': landmarks}
+            print("Response:", response_data)
+            return JsonResponse(response_data)
 
     return JsonResponse({'error': 'Invalid request method.'}, status=405)
 
